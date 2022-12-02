@@ -1,75 +1,67 @@
-function uploadnewfile() {
-    //Define the folder path to this example.
-    var serverRelativeUrlToFolder = "Resume";
-
-    //Get the test values from the input and text input page controls.
-
-    var fileInput = $('#getFile');
-     fileName = fileInput[0].files[0].name;
-    var fileCount = fileInput[0].files.length;
-
-    //get the serverr url
-    var serverUrl = _spPageContextInfo.webAbsoluteUrl;
-    var filesUploaded =0;
-    for(var i=0; i<fileCount; i++)
-    {
-        //get the local file as an array buffer.
-        var getFile = getFileBuffer(i);
-
-        getFile.done(function(arrayBuffer,i){
-            // add the file to the sharepoint folder
-             var addFile = addFileToFolder(arrayBuffer,i);
-              addFile.done(function(){
-                filesUploaded++;
-                if(fileCount == fielsUploaded){
-                    alert("All files uploaded successfully");
-                    $("#getfile").value = null;
-                    filesUploaded = 0;
-                }
-            });
-            addFile.fail(onerror);
+function uploadDocument() {
+    var files = $("#attachment")[0].files;
+    if (files.length > 0) {
+        fileName = files[0].name;
+        var webUrl = _spPageContextInfo.webAbsoluteUrl;
+        var documentLibrary = "DemoLibrary";
+        var targetUrl = _spPageContextInfo.webServerRelativeUrl + "/" + documentLibrary;
+        // Construct the Endpoint
+        var url = webUrl + "/_api/Web/GetFolderByServerRelativeUrl(@target)/Files/add(overwrite=true, url='" + fileName + "')?@target='" + targetUrl + "'&$expand=ListItemAllFields";
+        uploadFileToFolder(files[0], url, function(data) {
+            var file = data.d;
+            DocFileName = file.Name;
+            var updateObject = {
+                __metadata: {
+                    type: file.ListItemAllFields.__metadata.type
+                },
+                FileLeafRef: DocFileName //FileLeafRef --> Internal Name for Name Column
+            };
+            alert("File uploaded successfully!");
+        }, function(data) {
+            alert("File uploading failed");
         });
-        getFile.fail(onerror);
+    } else {
+        alert("Kindly select a file to upload.!")
     }
-// get the local file as an array buffer.
-function getFileBuffer(i){
-     var deferred = jQuery.Deferred();
-     var reader =new FileReader();
-     reader.onloadend = function(e){
-        deferred.resolve(e.target.result, i);
-     }
-     reader.onerror= function(e){
-        deferred.resolve(e.target.error);
 }
-reader.readAsArrayBuffer(fileInput[0].files[i]);
-return deferred.promise();
-} 
-//add the file to the file collection in the shared documents folder.
-function addFileToFolder(arrayBuffer,i){
-    var index = i;
-    //get the file name from the file input control on the page.
-    var fileName = fileInput[0].files[index].name;
-    //construct the endpoint.
-    var fileCollectionEndpoint = String.format(
-        "{0}/_api/web?getfolderbyserverrelativeurl('{1}')/files" + 
-        "/add(overwrite=true, url='{2}')",
-        serverUrl,serverRelativeUrlToFolder, fileName);
-        //send the request and return the response.
-        // this call returns the SP file.
-        return jQuery.ajax({
-            url: fileCollectionEndpoint,
-            type : "POST",
-            data : arrayBuffer,
-            processData : false,
-            Headers:{
-                "accept" : "application/json;odata=verbose",
-                "X-RequesrDigest" : jQuery("#_REQUESTDIGEST").val(),
-                "content-length" : arrayBuffer.byteLength
-            }         
+
+function uploadFileToFolder(fileObj, url, success, failure) {
+    var apiUrl = url;
+    // Initiate method calls using jQuery promises.
+    // Get the local file as an array buffer.
+    var getFile = getFileBuffer(fileObj);
+    // Add the file to the SharePoint folder.
+    getFile.done(function(arrayBuffer) {
+        $.ajax({
+            url: apiUrl,//File Collection Endpoint
+            type: "POST",
+            data: arrayBuffer,
+            processData: false,
+            async: false,
+            headers: {
+                "accept": "application/json;odata=verbose",
+                "X-RequestDigest": jQuery("#__REQUESTDIGEST").val(),
+            },
+            success: function(data) {
+                success(data);
+            },
+            error: function(data) {
+                success(data);
+            }
         });
+    });
 }
+
+// Get the local file as an array buffer.
+function getFileBuffer(uploadFile) {
+    var deferred = jQuery.Deferred();
+    var reader = new FileReader();
+    reader.onloadend = function(e) {
+        deferred.resolve(e.target.result);
+    }
+    reader.onerror = function(e) {
+        deferred.reject(e.target.error);
+    }
+    reader.readAsArrayBuffer(uploadFile);
+    return deferred.promise();
 }
- // display error messages
- function onError(error){
-    alert(error.responseText);
- }
