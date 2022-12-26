@@ -1,17 +1,264 @@
-<!DOCTYPE html>
+<script>
+function upload() {
+        var serverRelativeUrlToFolder = myFunction();
+        // Get test values from the file input and text input page controls.
+        var fileInput = jQuery('#getFile');
+        var newName = jQuery('#displayName').val();
+        var fileCount = fileInput[0].files.length;
+        // Get the server URL.
+        var serverUrl = _spPageContextInfo.webAbsoluteUrl;
+        var filesUploaded = 0;
+        for (var i = 0; i < fileCount; i++) {
+            // Initiate method calls using jQuery promises.
+            // Get the local file as an array buffer.
+            var getFile = getFileBuffer(i);
+            getFile.done(function (arrayBuffer, i) {
+
+                // Add the file to the SharePoint folder.
+                var addFile = addFileToFolder(arrayBuffer, i);
+                addFile.done(function (file, status, xhr) {
+                   //Get ID of File uploaded 
+                    
+                            filesUploaded++;
+                            if (fileCount == filesUploaded) {
+                                alert("All files uploaded successfully");
+                                //$("#msg").append("<div>All files uploaded successfully</div>");
+                                $("#getFile").value = null;
+                                filesUploaded = 0;
+                            }
+                        });
+                addFile.fail(onError);
+            });
+            getFile.fail(onError);
+
+        }
+
+        // Get the local file as an array buffer.
+        function getFileBuffer(i) {
+            var deferred = jQuery.Deferred();
+            var reader = new FileReader();
+            reader.onloadend = function (e) {
+                deferred.resolve(e.target.result, i);
+            }
+            reader.onerror = function (e) {
+                deferred.reject(e.target.error);
+            }
+            reader.readAsArrayBuffer(fileInput[0].files[i]);
+            return deferred.promise();
+        }
+
+        // Add the file to the file collection in the Shared Documents folder.
+        function addFileToFolder(arrayBuffer, i) {
+            var index = i;
+
+            // Get the file name from the file input control on the page.
+            var fileName = fileInput[0].files[index].name;
+
+            // Construct the endpoint.
+            var fileCollectionEndpoint = String.format(
+                    "{0}/_api/web/getfolderbyserverrelativeurl('{1}')/files" +
+                    "/add(overwrite=true, url='{2}')",
+                    serverUrl, serverRelativeUrlToFolder, fileName);
+
+            // Send the request and return the response.
+            // This call returns the SharePoint file.
+            return jQuery.ajax({
+                url: fileCollectionEndpoint,
+                type: "POST",
+                data: arrayBuffer,
+                processData: false,
+                headers: {
+                    "accept": "application/json;odata=verbose",
+                    "X-RequestDigest": jQuery("#__REQUESTDIGEST").val(),
+                    "content-length": arrayBuffer.byteLength
+                }
+            });
+        }
+    }
+
+    // Display error messages. 
+    function onError(error) {
+        alert(error.responseText);
+    }
+
+    function myFunction() {
+        var x = document.getElementById("selDestLib").value;
+        return x;
+        }
+
+    function updateFileMetadata(libraryName, item, colPropObject) {
+        var def = jQuery.Deferred();
+
+        var restSource = siteUrl + "/_api/Web/Lists/getByTitle('" + libraryName + "')/Items(" + item.Id + ")";
+        var jsonString = "";
+
+        var metadataColumn = new Object();
+        metadataColumn["type"] = item.__metadata.type;
+        //columnArray.push(metadataColumn);
+        if (colPropObject == null || colPropObject == 'undefined')// For library having no column properties to be updated
+        {
+            colPropObject = new Object();
+        }
+        colPropObject["__metadata"] = metadataColumn;
+        jsonString = JSON.stringify(colPropObject);
+        var dfd = jQuery.Deferred();
+        jQuery.ajax(
+        {
+            'url': restSource,
+            'method': 'POST',
+            'data': jsonString,
+            'headers':
+                {
+                    'accept': 'application/json;odata=verbose',
+                    'content-type': 'application/json;odata=verbose',
+                    'X-RequestDigest': jQuery('#__REQUESTDIGEST').val(),
+                    "IF-MATCH": item.__metadata.etag,
+                    "X-Http-Method": "MERGE"
+                },
+            'success': function (data) {
+                var d = data;
+                dfd.resolve(d);
+            },
+            'error': function (err) {
+                dfd.reject(err);
+            }
+        });
+
+        return dfd.promise();
+    }
+/*=====================================================
+Get Item for Uploaded Document
+=======================================================*/
+    function getItem(file) {
+        var def = jQuery.Deferred();
+        jQuery.ajax({
+            url: file.ListItemAllFields.__deferred.uri,
+            type: "GET",
+            dataType: "json",
+            headers: {
+                Accept: "application/json;odata=verbose"
+            },
+            success: function (data) {
+                def.resolve(data);
+            },
+            error: function (data, arg, jhr) {
+                def.reject(data, arg, jhr);
+            }
+        });
+        return def.promise();
+        //return call;
+    }
+</script>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
+<!doctype html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sharepoint bulk insert utility</title>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
-    <script type="text/javascript" src="https://122022.sharepoint.com/sites/mp2/Employee/video1.js"></script>
+	<title>SpRestLib Demo :: File Upload</title>
+	<meta charset="utf-8">
+	<meta name="keywords"
+		content="SpRestLib, JavaScript, js-sharepoint, SP2013 REST, SharePoint 2013, SharePoint 2016, SharePoint Online">
+	<meta name="description" content="Content Editor Webpart: SpRestLib features and capabilities">
+	<meta name="revised" content="20181211">
+
+	<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootswatch/4.1.3/yeti/bootstrap.min.css">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.15.0/themes/prism-okaidia.min.css">
+	<script src="https://cdn.jsdelivr.net/gh/gitbrent/SpRestLib@1.9.0/dist/sprestlib.min.js"></script>
+
+	<script src="https://cdn.jsdelivr.net/gh/gitbrent/SpRestLib@1.9.0/dist/sprestlib.bundle.js"></script>
+	<style>
+		/* sharpeoint corev15.css vfixes */
+		#contentRow {
+			padding-top: 0;
+		}
+
+		/* ========== ========== */
+		#tabResults thead th {
+			font-size: 12px;
+		}
+
+		#tabResults tbody td:last-child {
+			background: white;
+		}
+
+		.groupItem {
+			display: inline-block;
+			background: #CDE7F1;
+			color: #666;
+			border: 1px #ccc solid;
+			margin: 0 6px 3px 0;
+			padding: 2px 6px;
+			border-radius: 3px;
+		}
+
+		/* ========== ========== */
+		#console {
+			font-face: courier new, monospace;
+			font-size: 12px;
+			padding: 5px;
+			background: #eee;
+			border: 1px #ccc solid;
+		}
+
+		#console span {
+			color: red;
+			background: yellow;
+			font-weight: bold;
+			font-size: large;
+		}
+	</style>
+
+	<script>
+		// APP
+		var APP_BLD = 20181209;
+		// CONST
+		var HTML_SPINNER = '<div class="sprlib-spinner"><div class="sprlib-bounce1"></div><div class="sprlib-bounce2"></div><div class="sprlib-bounce3"></div></div>';
+	</script>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
+	<script type="text/javascript" src="https://122022.sharepoint.com/sites/mp2/Employee/video1.js"></script>
+
 </head>
+
 <body>
-   <div class="div">
-  <input id="getFile" type="file" multiple="multiple"/><br />
-<input id="addFileButton" type="button" value="Upload" onclick="uploadnewfile()"/>
-   </div> 
+	<div class="container mt-lg-3 " style="width: 800px;">
+        <h1 class="text-primary mb-4" style="text-align: center;">SharePoint Bulk Insert Utility</h1>
+        <div class="row mx-lg-auto" style="padding: 20px;">
+            <div class="col">
+                <div id="appOptions" class="container">
+                    <h5 class="text-primary text-center">Choose your SpRestLib and files you want to upload</h5>
+					<div id="contOptions" class="container bg-light border px-4 py-3 my-3">
+						<div class="row mb-4">
+							<div class="col">
+								<label for="selDestLib" class="text-muted text-uppercase">Target Library</label>
+								<select id="selDestLib" class="form-control bg-white" onchange="myFunction()" >
+                                    <option value="DemoLibrary" >DemoLibrary </option>
+                                    <option value="Resume" >Resume</option>
+                                    <option value="Employee" >Employee</option>
+								</select>
+								<div class="invalid-feedback">Please select a Library</div>
+								<div class="sprlib-spinner">
+									<div class="sprlib-bounce1"></div>
+									<div class="sprlib-bounce2"></div>
+									<div class="sprlib-bounce3"></div>
+								</div>
+							</div>
+						</div>
+						<div class="row mb-3">
+							<div class="col">
+								<label for="selDestLib" class="text-muted text-uppercase">Source File</label>
+								<input id="getFile" type="file" class="form-control" multiple="multiple"/>
+								<div class="invalid-feedback">Please select a File</div>
+							</div>
+						</div>
+					</div>
+					<button id="addFileButton" type="button" class="btn btn-success w-50" style="display: block; margin: auto;" onclick="upload()">Upload File</button>
+				</div>
+			</div>
+
+		</div>
+	</div>
+	</div>
 </body>
+
 </html>
